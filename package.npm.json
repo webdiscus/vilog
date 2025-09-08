@@ -1,0 +1,31 @@
+{
+"name":"vilog",
+	"version": "0.0.1-beta.0",
+	"description": "A tiny tool for colorful debug output and performance profiling",
+	"keywords": [
+		"log",
+		"debug",
+		"debugger",
+		"profiling"
+	],
+	"license": "ISC",
+	"author": "webdiscus",
+	"repository": "webdiscus/vilog",
+	"type": "module",
+	"main": "./index.cjs",
+	"module": "./index.mjs",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"require": "./index.cjs",
+			"import": "./index.mjs"
+		}
+	},
+	"sideEffects": false,
+	"engines": {
+		"node": ">=14"
+	},
+	"dependencies": {
+		"ansis": "^4.1.0"
+	}
+}
