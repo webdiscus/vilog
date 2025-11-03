@@ -3,11 +3,13 @@ import {importModule} from './testHelpers.js';
 
 const importVilog = async ()=> importModule('../src/index.js')
 
+let outSpy;
 let consoleLogSpy;
 let consoleWarnSpy;
 
 beforeEach(() => {
-  consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => {});
+  //consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
@@ -24,8 +26,8 @@ describe('Vilog API', () => {
     const log = new Vilog('foo');
 
     const received = log('test');
-    expect(received).toEqual(expect.stringMatching(/^\[foo] test/));
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/^\[foo] test/));
+    expect(received).toEqual(expect.stringMatching(/foo test/));
+    expect(outSpy).toHaveBeenCalledWith(expect.stringMatching(/foo test/));
   });
 
   test('duplicate namespace returns same instance and warns once', async () => {
@@ -50,32 +52,16 @@ describe('Vilog API', () => {
     });
 
     const received = log('x', 1, 2);
-    expect(received).toEqual(expect.stringMatching(/^\[foo:bar] x/));
-    expect(outSpy).toHaveBeenCalledWith(expect.stringMatching(/^\[foo:bar] x/));
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(received).toEqual(expect.stringMatching(/foo:bar x/));
+    expect(outSpy).toHaveBeenCalledWith(expect.stringMatching(/foo:bar x/));
   });
 
-  test('override log method after creation', async () => {
-    const Vilog = await importVilog();
-    const outSpy = vi.fn();
-
-    const log = new Vilog('foo:bar');
-    log.log = (message) => {
-      outSpy(message);
-    };
-
-    const received = log('test');
-    expect(received).toEqual(expect.stringMatching(/^\[foo:bar] test/));
-    expect(outSpy).toHaveBeenCalledWith(expect.stringMatching(/^\[foo:bar] test/));
-    expect(consoleLogSpy).not.toHaveBeenCalled();
-  });
-
-  test('override format via options', async () => {
+  test('override render via options', async () => {
     const Vilog = await importVilog();
     const outSpy = vi.fn();
 
     const log = new Vilog('foo:bar', {
-      format({ ns, msg, diff, total }) {
+      render({ ns, msg, diff, total }) {
         return `<<${ns}>> ${msg}`;
       },
       log(message) {
@@ -86,25 +72,6 @@ describe('Vilog API', () => {
     const received = log('test');
     expect(received).toBe('<<foo:bar>> test');
     expect(outSpy).toHaveBeenCalledWith('<<foo:bar>> test');
-    expect(consoleLogSpy).not.toHaveBeenCalled();
-  });
-
-  test('override format after creation', async () => {
-    const Vilog = await importVilog();
-    const outSpy = vi.fn();
-
-    const log = new Vilog('foo:bar');
-    log.format = function ({ ns, msg, diff, total }) {
-      return `<<${ns}>> ${msg}`;
-    };
-    log.log = (message) => {
-      outSpy(message);
-    };
-
-    const received = log('test');
-    expect(received).toBe('<<foo:bar>> test');
-    expect(outSpy).toHaveBeenCalledWith('<<foo:bar>> test');
-    expect(consoleLogSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -117,7 +84,55 @@ describe('Vilog enable/disable', () => {
 
     const received = log('hidden');
     expect(received).toBeUndefined();
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(outSpy).not.toHaveBeenCalled();
+  });
+
+  test('options.enabled=false, DEBUG=*', async () => {
+    const Vilog = await importVilog();
+
+    process.env.DEBUG = '*';
+
+    const log1 = new Vilog('foo', { enabled: false });
+    expect(log1.enabled).toBe(true);
+
+    const log2 = new Vilog('bar', { enabled: false });
+    expect(log2.enabled).toBe(true);
+  });
+
+  test('options.enabled=false, DEBUG=foo', async () => {
+    const Vilog = await importVilog();
+
+    process.env.DEBUG = 'foo';
+
+    const log1 = new Vilog('foo', { enabled: false });
+    expect(log1.enabled).toBe(true);
+
+    const log2 = new Vilog('bar', { enabled: false });
+    expect(log2.enabled).toBe(false);
+  });
+
+  test('options.enabled=false, DEBUG=foo:*', async () => {
+    const Vilog = await importVilog();
+
+    process.env.DEBUG = 'foo:*';
+
+    const log1 = new Vilog('foo:one', { enabled: false });
+    expect(log1.enabled).toBe(true);
+
+    const log2 = new Vilog('foo:two', { enabled: false });
+    expect(log2.enabled).toBe(true);
+
+    const log3 = new Vilog('bar:one', { enabled: false });
+    expect(log3.enabled).toBe(false);
+  });
+
+  test('options.enabled=false, DEBUG=not_matched', async () => {
+    const Vilog = await importVilog();
+
+    process.env.DEBUG = 'not_matched';
+
+    const log = new Vilog('foo', { enabled: false });
+    expect(log.enabled).toBe(false);
   });
 
   test('enabled getter/setter toggles per ns (no global override)', async () => {
@@ -131,10 +146,10 @@ describe('Vilog enable/disable', () => {
 
     a.enabled = false;
     expect(a('test a')).toBe(undefined);
-    expect(b('test b')).toEqual(expect.stringMatching(/^\[b:x] test b/));
+    expect(b('test b')).toEqual(expect.stringMatching(/b:x test b/));
 
     a.enabled = true;
-    expect(a('test a')).toEqual(expect.stringMatching(/^\[a:x] test a/));
+    expect(a('test a')).toEqual(expect.stringMatching(/a:x test a/));
   });
 
   test('disable() -> all off; enable() -> clear all rules', async () => {
@@ -169,14 +184,14 @@ describe('Vilog enable/disable', () => {
     b1('ok');
     b2('ok');
 
-    expect(consoleLogSpy).toHaveBeenCalledTimes(3);
-    expect(consoleLogSpy.mock.calls).toEqual([
-      [expect.stringContaining('[a:x] ok')],
-      [expect.stringContaining('[b:x] ok')],
-      [expect.stringContaining('[b:y] ok')],
+    expect(outSpy).toHaveBeenCalledTimes(3);
+    expect(outSpy.mock.calls).toEqual([
+      [expect.stringContaining('a:x ok')],
+      [expect.stringContaining('b:x ok')],
+      [expect.stringContaining('b:y ok')],
     ]);
 
-    consoleLogSpy.mockClear();
+    outSpy.mockClear();
 
     Vilog.disable('b:*');
 
@@ -184,9 +199,9 @@ describe('Vilog enable/disable', () => {
     b1('hidden1');
     b2('hidden2');
 
-    expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-    expect(consoleLogSpy.mock.calls).toEqual([
-      [expect.stringContaining('[a:x] ok2')],
+    expect(outSpy).toHaveBeenCalledTimes(1);
+    expect(outSpy.mock.calls).toEqual([
+      [expect.stringContaining('a:x ok2')],
     ]);
   });
 
@@ -201,8 +216,8 @@ describe('Vilog enable/disable', () => {
     a('keep');
     b('drop');
 
-    expect(consoleLogSpy.mock.calls).toEqual([
-      [expect.stringContaining('[foo:a] keep')],
+    expect(outSpy.mock.calls).toEqual([
+      [expect.stringContaining('foo:a keep')],
     ]);
   });
 
@@ -213,11 +228,11 @@ describe('Vilog enable/disable', () => {
 
     Vilog.disable('a:*');
     a('hidden');
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(outSpy).not.toHaveBeenCalled();
 
     Vilog.enable('a:*');
     a('shown');
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringMatching(/^\[a:x] shown/));
+    expect(outSpy).toHaveBeenCalledWith(expect.stringMatching(/a:x shown/));
   });
 
   test('enable per instance does not override global "*"', async () => {
@@ -232,7 +247,7 @@ describe('Vilog enable/disable', () => {
 
     const received = a('hidden');
     expect(received).toBeUndefined();
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(outSpy).not.toHaveBeenCalled();
 
     Vilog.enable('*'); // global on
     expect(a.enabled).toBe(true);

@@ -1,7 +1,7 @@
 {
   "name": "vilog",
-  "version": "0.0.1-beta.0",
-  "description": "A tiny tool for colorful debug output and performance profiling",
+  "version": "0.0.1-beta.1",
+  "description": "A tiny colorful tool for logging, debugging and performance profiling",
   "keywords": [
     "log",
     "debug",
@@ -46,7 +46,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "ansis": "^4.1.0"
+    "ansis": "^4.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.27.1",

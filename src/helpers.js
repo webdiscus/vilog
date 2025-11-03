@@ -1,125 +1,95 @@
 /**
- * Clock factory (ms).
- **/
-function createNow () {
-  // browsers / Deno / Bun / modern Node v18.8+
-  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
-    return () => performance.now();
+ * View output factory.
+ * Node.js - process.stdout
+ * Browser - console.log
+ */
+function createView () {
+  if (process && 'write' in process.stdout) {
+    return (v) => process.stdout.write(v + '\n');
   }
 
-  // older Node.js v10.7+, process.hrtime.bigint() returns a monotonic in nanoseconds
-  if (
-    typeof process !== 'undefined' &&
-    typeof process.hrtime === 'function' &&
-    process.hrtime.bigint
-  ) {
-    return () => Number(process.hrtime.bigint() / 1_000_000n);
-  }
-
-  // fallback: wall clock (not monotonic)
-  return () => Date.now();
+  return console.log;
 }
 
-// resolve once per module/runtime
-export const now = createNow();
+export const view = createView();
 
 /**
- * Format milliseconds into a compact, human-readable string.
+ * Deeply merges values from the source object into the target object.
+ * Only keys that already exist in the target are considered.
+ * Unknown keys in the source are ignored.
+ * Objects are merged recursively, primitives and functions are overwritten.
  *
- * Thresholds
- * - < 1000 ms  → `"Xms"`
- * - < 60 s     → `"Xs"`
- * - ≥ 60 s     → always include lower units down to seconds:
- *                days  → `"Xd Xh Xm Ys"`
- *                hours → `"Xh Xm Ys"`
- *                mins  → `"Xm Ys"`
- *
- * Precision behavior
- * - `options.precision` controls **decimal places for seconds** (default: `3`).
- * - For **milliseconds** (`ms < 1000`), decimals are shown only at higher precision to avoid noisy sub-ms output.
- *   The number of ms decimals is: `msDecimals = max(0, precision - 3)`
- *
- *   This maps to:
- *   - `precision ≤ 3` → integer ms (no decimals)
- *   - `precision = 4` → 1 decimal in **ms** (0.1 ms = 100 µs)
- *   - `precision = 5` → 2 decimals in **ms** (0.01 ms = 10 µs)
- *   - `precision = 8` → 5 decimals in **ms** (0.00001 ms = 10 ns)
- *
- * - For **seconds** (`ms ≥ 1000` and `< 60_000`), the number of decimals equals
- *   `precision` directly:
- *   - `precision = 1` → 0.1 s = 100 ms
- *   - `precision = 3` → 0.001 s = 1 ms
- *   - `precision = 4` → 0.0001 s = 100 µs
- *   - `precision = 8` → 0.00000001 s = 10 ns
- *
- * Notes
- * - Trailing zeros (and a trailing decimal point) are trimmed.
- * - For durations ≥ 60 s, output is split into units (d/h/m) plus seconds;
- *   seconds may include decimals per `precision`.
- *
- * Examples
- * - `formatMs(200.12345678, {precision: 8}) → "200.12346ms"`  // 200 ms + 123 µs + 460 ns
- * - `formatMs(1309, {precision: 1})         → "1.3s"`
- * - `formatMs(1309, {precision: 3})         → "1.309s"`
- * - `formatMs(119999, {precision: 3})       → "1m 59.999s"`
- * - `formatMs(3600000, {precision: 3})      → "1h 0m 0s"`
- *
- * @param {number} ms
- * @param {{ precision?: number }} [options] Decimal places for seconds. Default: `3`.
- * @returns {string}
+ * @param {Record<string, any>} target The target object to mutate.
+ * @param {Record<string, any>} source The source object with overrides.
+ * @returns {Record<string, any>} The mutated target object.
  */
-export function formatMs (ms, options) {
-  const precision = options && Number.isInteger(options.precision) ? options.precision : 3;
+export function mergeDeep (target, source) {
+  for (const key in source) {
+    //if (!(key in target)) continue; // ignore unknown keys
 
-  if (ms < 1000) {
-    const msDecimals = Math.max(0, precision - 3);
-    return toFixedTrim(ms, msDecimals) + 'ms';
+    const val = source[key];
+    if (val && typeof val === 'object' && typeof target[key] === 'object') {
+      mergeDeep(target[key], val);
+    } else {
+      target[key] = val;
+    }
   }
 
-  if (ms < 60_000) {
-    return toFixedTrim(ms / 1000, precision) + 's';
+  return target;
+}
+
+export function getEnv (name, mockThis) {
+  // Note: In Deno 2.0+, the `process` is available globally
+  let thisRef = mockThis ?? globalThis;
+  let proc = thisRef.process ?? {};
+  let env = proc.env ?? {};
+
+  try {
+    // keys(env) triggers a Deno permission request; throws if access is denied
+    // stringify environment variable keys to check for specific ones using a RegExp
+    Object.keys(env);
+  } catch (error) {
+    // if the permission is not granted, environment variables have no effect, even variables like DEBUG will be ignored
+    // env now points to a new empty object to avoid Deno requests for every env access in code below
+    env = {};
   }
 
-  const DAY = 86_400_000;
-  const HOUR = 3_600_000;
-  const MINUTE = 60_000;
+  return env[name];
+}
 
-  const days = (ms / DAY) | 0;
-  ms -= days * DAY;
+export function matchPattern (pattern, str) {
+  if (pattern === '*') return true;
 
-  const hours = (ms / HOUR) | 0;
-  ms -= hours * HOUR;
+  if (pattern.endsWith('*')) {
+    const prefix = pattern.slice(0, -1);
+    if (str.startsWith(prefix)) return true;
+  }
 
-  const minutes = (ms / MINUTE) | 0;
-  ms -= minutes * MINUTE;
-
-  const seconds = ms / 1000; // fractional seconds
-
-  const parts = [];
-
-  if (days) parts.push(days + 'd');
-  if (days || hours) parts.push(hours + 'h');
-  if (days || hours || minutes) parts.push(minutes + 'm');
-
-  parts.push(toFixedTrim(seconds, precision) + 's');
-
-  return parts.join(' ');
+  return pattern === str;
 }
 
 /**
- * @param {number} num
- * @param {number} precision
- * @return {string}
+ * Get caller stack trace information.
+ *
+ * @param {number} depth 0 = immediate caller, 1 = caller’s caller, etc.
+ * @return {{file: string|null, line: number|null, column: number|null } | null}
  */
-function toFixedTrim (num, precision) {
-  if (precision <= 0) return String(Math.round(num));
+export function getCaller (depth = 0) {
+  const orig = Error.prepareStackTrace;
+  Error.prepareStackTrace = (err, callSites) => callSites;
 
-  let str = num.toFixed(precision);
+  const err = new Error();
+  Error.captureStackTrace(err, getCaller);
+  const stack = /** @type {import('v8').CallSite[]} */(err.stack) || [];
+  const site = stack[depth];
 
-  // trim trailing zeros and a trailing dot
-  let i = str.length - 1;
-  while (i >= 0 && str[i] === '0') i--;
-  if (i >= 0 && str[i] === '.') i--;
+  Error.prepareStackTrace = orig;
 
-  return str.slice(0, i + 1);
+  if (!site) return null;
+
+  return {
+    file: site.getFileName() || site.getScriptNameOrSourceURL() || null,
+    line: site.getLineNumber() || null,
+    column: site.getColumnNumber() || null,
+  };
 }
