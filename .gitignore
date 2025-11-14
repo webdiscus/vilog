@@ -9,3 +9,6 @@ public
 dist
 test/output/
 tsconfig.tsbuildinfo
+
+# local perf test
+test/_perf.test.js
