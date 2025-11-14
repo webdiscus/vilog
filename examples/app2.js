@@ -9,7 +9,7 @@
  * the collected log history to the console.
  */
 
-import Vilog from 'Vilog';
+import Vilog from 'vilog';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -20,13 +20,17 @@ const appName = 'Demo';
 app('Starting %s... Wait ~3 seconds to finish.', appName);
 
 // configure these logs in silent mode
-const logOne = new Vilog('task:one', { silent: true });
-const logTwo = new Vilog('task:two', { silent: true });
+const logOne = new Vilog({ name: 'task:one', silent: true });
+const logTwo = new Vilog({
+  name: 'task:two',
+  silent: true,
+  levels: { debug: { style: { name: 'magentaBright' } } },
+});
 
 async function runTaskOne (finish) {
   while (Date.now() < finish) {
     // collects log
-    logOne('processing random workload');
+    logOne.debug('processing random workload');
     await sleep(Math.random() * 500);
   }
 }
@@ -34,14 +38,14 @@ async function runTaskOne (finish) {
 async function runTaskTwo (finish) {
   while (Date.now() < finish) {
     // collects log
-    logTwo('checking result');
+    logTwo.debug('checking result');
     await sleep(Math.random() * 1000);
   }
 }
 
 function onFinish () {
   console.log('--- log history ---');
-  const output = Vilog.flushString();
+  const output = Vilog.flush();
   console.log(output);
 }
 

@@ -1,3 +1,4 @@
+import { isFn } from './helpers.js';
 import format from './formatDuration.js';
 
 /**
@@ -16,12 +17,12 @@ import format from './formatDuration.js';
  */
 function createNow () {
   // modern: Node 18.8+ / Deno / Bun / Browsers
-  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+  if (typeof performance !== 'undefined' && isFn(performance.now)) {
     // cache the function once to avoid property lookup, it is 1.4x faster then call performance.now();
     return performance.now.bind(performance);
   }
   // older: Node.js v10.7+
-  if (typeof process !== 'undefined' && typeof process.hrtime === 'function' && process.hrtime.bigint) {
+  if (typeof process !== 'undefined' && isFn(process.hrtime) && process.hrtime.bigint) {
     return () => Number(process.hrtime.bigint() / 1_000_000n);
   }
   // fallback

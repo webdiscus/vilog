@@ -1,0 +1,9 @@
+{
+  "name": "demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "readme-01": "node ./readme/01-base-example.js",
+    "readme-02": "node ./readme/02-style-example.js"
+  }
+}

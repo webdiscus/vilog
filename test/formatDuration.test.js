@@ -2,7 +2,7 @@ import { describe, test, expect, afterAll } from 'vitest';
 
 import timer from '../src/timer.js';
 import formatDuration from '../src/formatDuration.js';
-import { sleep, syncSleep } from './util/testHelpers.js';
+import { sleep, syncSleep } from './util/helpers.js';
 
 const { now } = timer;
 

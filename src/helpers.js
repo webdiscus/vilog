@@ -13,6 +13,8 @@ function createView () {
 
 export const view = createView();
 
+export const isFn = (v) => typeof v === 'function';
+
 /**
  * Deeply merges values from the source object into the target object.
  * Only keys that already exist in the target are considered.

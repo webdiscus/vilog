@@ -162,7 +162,7 @@ function formatDuration(ms, { trim } = { trim: true }) {
   }
 
   // build trimming string "d h m s"
-  const parts = [];
+  let parts = [];
   if (d) parts.push(d + spacer + units[6]);
   if (d || h) parts.push(h + spacer + units[5]);
   if (d || h || m) parts.push(m + spacer + units[4]);

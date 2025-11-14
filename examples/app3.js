@@ -1,17 +1,17 @@
 import Vilog from 'Vilog';
 
 const levels = {
-  info: { layout: '[time +diff] [elapsed] [label] [name] msg' },
-  warn: { layout: '[time +diff] [elapsed] [label] [name] msg' },
-  error: { layout: '[time +diff] [elapsed] [label] [name] msg [file:line:column]' },
+  info: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {elapsed}] [{label}] {name} {msg}' },
+  warn: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {elapsed}] [{label}] {name} {msg}' },
+  error: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {elapsed}] [{label}] {name} {msg} {file}:{line}:{column}' },
 };
 
 const silent = true;
-const authLog = new Vilog({ name: 'auth', silent, precision: 8, levels});
-const paymentLog = new Vilog({ name: 'payment', silent, precision: 8, levels });
-const httpLog = new Vilog({ name: 'http', silent, precision: 8, levels });
+const authLog = new Vilog({ name: 'auth', silent, levels});
+const paymentLog = new Vilog({ name: 'payment', silent, levels });
+const httpLog = new Vilog({ name: 'http', silent, levels });
 
-//await sleep(2000);
+authLog('Starting app');
 
 httpLog.info('User %s GET %s', 'alex', '/login');
 authLog.warn('Failed login for %s', 'alex');
@@ -35,7 +35,4 @@ authLog.info('User %s logged out', 'alex');
 authLog.warn('%s used old password %d times', 'alex', 2);
 authLog.info('Password reset by %s', 'alex');
 
-
-//Vilog.flush({ orderBy: 'name' });
-//Vilog.flush({ orderBy: 'time' });
 Vilog.flush({});

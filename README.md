@@ -1,22 +1,123 @@
-# Vilog (view log)
+# Vilog
 
-A tiny tool for colorful debug output and performance profiling
+Pretty logging for Node.js with customizable layouts, buffered output, and precise profiling.
+Designed for real-world production workloads.
+Optimized for speed and visual clarity.
 
-## Usage
+## Features
 
-Here is a very simple example:
+- Fast logging core optimized for high-frequency logs.\
+  Layouts are _compiled once_ into a pre-processed buffer — minimal runtime overhead.
+- Customizable layouts with tokens: `%d{HH:mm:ss}`, `{elapsed}`, `{duration}`, `{name}`, `{msg}`, `{file}`, etc.
+  - Built-in tokens for time, duration, level, namespace, caller, and more
+  - Support for both static tokens (pre-compiling) and dynamic tokens (runtime)
+- Flexible color themes for levels with multi-style support.
+- Custom render function to fully control how a log line is produced.
+- Buffered logging mode with manual `flush()` for batch output or silent mode.\
+  In `silent` mode, logs are stored in memory and not outputted until flushed.
+- Logger namespaces with independent layouts, styles, and settings.
+- Precise profiling with auto-scaled units: `ns`, `μs`, `ms`, `s`, `m`, `h`, `d`
+  - `{duration}` - time since the previous log
+  - `{elapsed}` - total time since application start
+- Handles any value type: objects, arrays, errors, primitives, and multiple arguments.
+- Test-friendly design with predictable output and mockable time, duration, and colors.
+
+## Install
+
+```bash
+npm install vilog
+```
+
+## Basic example
+
 ```js
 import Vilog from 'vilog';
 
-const log = new Vilog(' foo ');
+const log = new Vilog({ name: 'api:sync' });
 
-log('ping'); // default log
+log('starting app');
+log.info('fetched %d records from %s', 120, '/api/data');
+log.warn('request retry %d pending', 5);
+log.error('request failed', new Error('Boom!'));
 
-log.info('Info message');
-log.warn('Warning message');
-log.debug('Debug message');
-log.error('Error message');
+// mark a profiling point (no output, only sets the timer)
+log.debug(null, 'start processing');
+// ... do something
+// log message with elapsed time since last mark or log call
+log.debug('processed %d orders', 99);
 ```
+
+**Output example**
+![Output of basic example](https://github.com/webdiscus/vilog/raw/master//docs/example-01.png)
+
+## Advanced example
+
+```js
+import Vilog from 'vilog';
+
+// destructure colors from the exposed Ansis instance
+const { cyan, yellow, hex } = Vilog.color;
+
+const log = new Vilog({
+  name: 'api:sync',
+
+  levels: {
+    default: {
+      // customize default layout
+      layout: '%d{YYYY-MM-DD HH:mm:ss} {msg}',
+    },
+    info: {
+      // customize date format
+      layout: '%d{YYYY-MM-DD} %d{HH:mm:ss} {label} {msg}',
+      // custom styles for date parts, using green and truecolor via hex()
+      style: { 'YYYY-MM-DD': 'green', 'HH:mm:ss': hex('#1D89D9') },
+    },
+    debug: {
+      // custom layout with profiling and PID
+      layout: '%d{ts.sss} {name} {pidLabel}{pid} {msg} +{duration} ({elapsed})',
+      style: { pidLabel: 'green', pid: 'yellow' },
+    },
+    // custom log level
+    trace: {
+      label: 'TRACE', // human-readable label for the level
+      layout: '{ label } {name} {msg} {file}:{line}:{column}',
+      style: { label: 'black.bgYellow' },
+    },
+    // custom level with custom render to json
+    json: {
+      // serialize only the relevant fields, omit the rest
+      render: ({ date, duration, data }) => JSON.stringify({ date, duration, data }),
+    },
+  },
+
+  // custom tokens used in layouts
+  tokens: {
+    pidLabel: 'PID:', // static token (precompiled once)
+    pid: () => process.pid, // dynamic token (evaluated at runtime)
+  },
+});
+
+log('starting app');
+// colorize placeholders in the message
+log.info(`fetched ${cyan`%d`} records from ${yellow`%s`}`, 120, '/api/data');
+log.warn(`request retry ${cyan`%d`} pending`, 5);
+log.error('request key is empty'); // outputs error message only
+log(new Error('request failed!')); // outputs error stack with error level
+log.trace('called at'); // outputs with caller info
+
+// mark a profiling point (no output, only sets the timer)
+log.debug(null, 'start processing');
+// ... do something
+// log message with elapsed time since last mark or log call
+log.debug('processed %d orders', 99);
+
+// log as serialized json
+log.json('request response', { foo: 'bar', baz: 200 });
+```
+
+**Output example**
+![Output of advanced example](https://github.com/webdiscus/vilog/raw/master//docs/example-01.png)
+
 
 TODO: complete the readme ...
 
