@@ -48,6 +48,7 @@ log.debug('processed %d orders', 99);
 ```
 
 **Output example**
+
 ![Output of basic example](https://github.com/webdiscus/vilog/raw/master//docs/example-01.png)
 
 ## Advanced example
@@ -116,7 +117,8 @@ log.json('request response', { foo: 'bar', baz: 200 });
 ```
 
 **Output example**
-![Output of advanced example](https://github.com/webdiscus/vilog/raw/master//docs/example-01.png)
+
+![Output of advanced example](https://github.com/webdiscus/vilog/raw/master//docs/example-02.png)
 
 
 TODO: complete the readme ...
