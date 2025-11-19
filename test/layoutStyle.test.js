@@ -321,7 +321,7 @@ describe('custom rendering', () => {
         myLevel: {
           label: 'CUSTOM',
           // NOTE: custom render receives only built-in tokens, custom tokens are not passed by design
-          render: ({ date, name, level, label, data, msg, duration, elapsed }, style) => {
+          render: ({ date, name, level, label, data, msg, duration, uptime }, style) => {
             return `${style.yellow(label)} | ${style.magenta(name)} | ${msg}`;
           },
         },
@@ -347,7 +347,7 @@ describe('custom rendering', () => {
       // note: only functions can be mocked by the render function
       tokens: {
         '%d': () => date,
-        elapsed: () => '111.11ms',
+        uptime: () => '111.11ms',
         duration: () => '11.01ns',
         file: () => '/path/to/app.js',
         line: () => 1080,
@@ -355,7 +355,7 @@ describe('custom rendering', () => {
       },
     });
 
-    const expected = '{"name":"json","level":"default","label":"","msg":"My data {\\"arr\\":[\\"foo\\",\\"bar\\"]}","data":["My data",{"arr":["foo","bar"]}],"date":"2025-11-11T10:59:01.075Z","duration":"11.01ns","elapsed":"111.11ms"}';
+    const expected = '{"name":"json","level":"default","label":"","msg":"My data {\\"arr\\":[\\"foo\\",\\"bar\\"]}","data":["My data",{"arr":["foo","bar"]}],"date":"2025-11-11T10:59:01.075Z","duration":"11.01ns","uptime":"111.11ms"}';
     const received = jsonLog('My data', { arr: ['foo', 'bar'] });
     expect(received).toBe(expected)
   });
@@ -375,7 +375,7 @@ describe('custom rendering', () => {
       // note: only functions can be mocked by the render function
       tokens: {
         '%d': () => date,
-        elapsed: () => '111.11ms',
+        uptime: () => '111.11ms',
         duration: () => '11.01ns',
         file: () => '/path/to/app.js',
         line: () => 1080,
@@ -403,7 +403,7 @@ describe('custom rendering', () => {
       // note: only functions can be mocked by the render function
       tokens: {
         '%d': () => date,
-        elapsed: () => '111.11ms',
+        uptime: () => '111.11ms',
         duration: () => '11.01ns',
         file: () => '/path/to/app.js',
         line: () => 1080,
@@ -499,15 +499,15 @@ describe('spacing around tokens in layout', () => {
       silent,
       levels: {
         default: {
-          layout: 'start:{ elapsed } duration:{ duration } {msg}', // 'elapsed' and 'duration' are dynamic built-in token
-          style: { elapsed: 'bgCyan', duration: 'bgCyan' },
+          layout: 'start:{ uptime } duration:{ duration } {msg}', // 'uptime' and 'duration' are dynamic built-in token
+          style: { uptime: 'bgCyan', duration: 'bgCyan' },
         },
       },
 
       tokens: {
         // mock built-in dynamic tokens
         '%d': () => date,
-        elapsed: '111.587ms', // define as static
+        uptime: '111.587ms', // define as static
         duration: () => '11.01ns', // define as function
       },
     });
@@ -516,7 +516,7 @@ describe('spacing around tokens in layout', () => {
     expect(received).toBe('start:[46m 111.587ms [49m duration:[46m 11.01ns [49m text');
   });
 
-  test('elapsed token with space around and plus char', async () => {
+  test('uptime token with space around and plus char', async () => {
     const Vilog = await importVilog();
     const log = new Vilog({
       name: 'test',
@@ -548,7 +548,7 @@ describe('default levels', () => {
       // mock built-in dynamic tokens
       tokens: {
         '%d': () => date,
-        elapsed: '111.11ms',
+        uptime: '111.11ms',
         duration: '11.01ns',
       },
     });
@@ -583,20 +583,20 @@ describe('default levels', () => {
           style: { '%d': 'bgWhiteBright.gray', label: 'bgRed' },
         },
         debug: {
-          layout: '%d{ ts.sss }{ name } {msg} { duration }{elapsed }',
+          layout: '%d{ ts.sss }{ name } {msg} { duration }{uptime }',
           style: {
             '%d': 'bgWhiteBright.gray',
             name: 'bgMagenta.whiteBright',
             duration: 'bgCyan.black',
-            elapsed: 'bgCyan.gray',
+            uptime: 'bgCyan.gray',
           },
         },
       },
       tokens: {
         // mock built-in dynamic tokens
         '%d': () => date,
-        //elapsed: (val) => `(${val})`, // modify original value of built-in dynamic token
-        elapsed: (val) => '(111.11ms)', // mock value
+        //uptime: (val) => `(${val})`, // modify original value of built-in dynamic token
+        uptime: (val) => '(111.11ms)', // mock value
         //duration: (val) => `+${val}`, // modify original value of built-in dynamic token
         duration: (val) => '+11.01ns', // mock value
       },
@@ -627,7 +627,7 @@ describe('custom levels', () => {
       tokens: {
         // mock built-in dynamic tokens
         '%d': () => date,
-        elapsed: '111.11ms',
+        uptime: '111.11ms',
         duration: '11.01ns',
         file: '/path/to/app.js',
         line: 1080,

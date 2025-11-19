@@ -5,7 +5,6 @@ import formatDate from './formatDate.js';
 import formatString from './formatString.js';
 import parse from './parse.js';
 import { getCaller, getEnv, isFn, mergeDeep, matchPattern, view } from './helpers.js';
-import { domainToASCII } from 'node:url';
 
 const { now, measure, updateTimer } = timer;
 
@@ -34,7 +33,7 @@ const buildStyler = (style) =>
  *
  * @property {string} date The date.
  * @property {string} duration The elapsed since last log call.
- * @property {string} elapsed The elapsed time since app start.
+ * @property {string} uptime The elapsed time since app start.
  * @property {string} name The logger's name.
  * @property {string} label The level label.
  * @property {string} msg The formatted message string.
@@ -44,20 +43,6 @@ const buildStyler = (style) =>
  */
 
 /**
- * Logging levels priority.
- * Lowest value has maximal priority.
- *
- * @type {{error: number, warn: number, default: number, info: number, debug: number}}
- */
-let levels = {
-  error: 0,
-  warn: 1,
-  default: 2,
-  info: 3,
-  debug: 4,
-}
-
-/**
  * Log index for auto creating the unique namespace when it is not specified.
  * @type {number}
  */
@@ -65,9 +50,9 @@ let logIdx = 1;
 
 /** Default tokens styles */
 const defaultStyle = {
-  '%d': 'gray', // %d
-  duration: 'gray', // time elapsed last call of log
-  elapsed: 'gray', // total time elapsed since app started (lib is imported)
+  '%d': 'gray',
+  duration: 'gray',
+  uptime: 'gray',
   label: 'white.bold',
   name: 'magenta',
   file: 'blueBright.underline',
@@ -78,6 +63,12 @@ const defaultStyle = {
 class Vilog {
   /** @type Map<Vilog> All created instances keyed by namespace. */
   static instances = new Map();
+
+  /** @type Ansis Exposed Ansis instance used for color styling. */
+  static color = color;
+
+  /** @type Timer Exposed Timer instance used for performance measure. */
+  static timer = timer;
 
   /** @type Set<string> Disabled namespace patterns: '*', 'foo:*', or exact names. */
   static #disabled = new Set();
@@ -93,9 +84,6 @@ class Vilog {
 
   /** @type string Order used for auto-flush. */
   static #flushOrderBy = 'time'; // 'time' | 'name'
-
-  /** @type Ansis Exposed Ansis instance used for color styling. */
-  static color = color;
 
   /**
    * The maximal level of logging.
@@ -140,7 +128,6 @@ class Vilog {
     // do nothing
   }
 
-
   /**
    * Level options.
    * @type {{default: Theme, info: Theme, warn: Theme, error: Theme, debug: Theme}}
@@ -148,50 +135,63 @@ class Vilog {
   _levels = {
     // 0
     error: {
-      label: 'ERROR',
-      layout: '%d {label} {msg}',
+      level: 0, // level priority
+      label: 'ERROR', // human label
+      layout: '%d {label} {msg}', // log format
       style: {
-        label: 'red.bold',
-        msg: 'red',
+        label: 'red.bold', // label color
+        msg: 'red', // message color
       },
     },
     // 1
     warn: {
+      level: 1,
       label: 'WARN',
       layout: '%d {label} {msg}',
       style: {
         label: 'yellow.bold',
-        //msg: '',
       },
     },
     // 2
-    default: {
-      // if label undefined, then use the key as level label
-      label: '',
-      layout: '%d {msg}',
-      style: {},
-    },
-    // 3
     info: {
+      level: 2,
       label: 'INFO',
       layout: '%d {label} {msg}',
       style: {
         label: 'cyan.bold',
       },
     },
+    // 3
+    default: {
+      level: 3,
+      label: '', // if label undefined, then use the key as level label
+      layout: '%d {msg}',
+      style: {},
+    },
     // 4
     debug: {
+      level: 4,
       label: 'DEBUG',
-      layout: '{name} {msg} +{duration} ({elapsed})',
+      layout: '{name} {msg} +{duration} ({uptime})',
       style: {
         duration: 'cyan',
-        elapsed: 'cyan',
+        uptime: 'cyan',
       },
     },
   };
 
   _tokens = {};
   _tokenFns = {};
+
+  /**
+   * General render function for all levels.
+   * The level-specific `levels.xxx.render` has higher priority.
+   * Default is `null` (layout templates are used).
+   *
+   * @type {null|function}
+   * @private
+   */
+  _render = null;
 
   /**
    * Create a callable logger instance.
@@ -227,16 +227,14 @@ class Vilog {
     this._options = options;
     this._tokens.name = hasName ? options.name : '';
 
-    // @TODO: enable/disable via ENV var is experimental, undocumented
-    let envName = options.env || 'DEBUG';
+    let envName = options.env || 'DEBUG'; // TODO: add to readme
     let enabledPattern = (envName ? getEnv(envName) : '') ?? '';
     if (options.enabled === false && !matchPattern(enabledPattern, this._id)) Vilog.disable(this._id);
 
-    // TODO: implement common render for all levels, level.render overrides it
-    //if (isFn(render)) this._render = render;
+    if (isFn(render)) this._render = render; // TODO: add to readme
+    if (isFn(format)) this._format = format; // TODO: add to readme
+    if (isFn(output)) this._out = output; // TODO: add to readme
 
-    if (isFn(format)) this._format = format;
-    if (isFn(output)) this._out = output;
     if (levels) mergeDeep(this._levels, levels);
     if (tokens) this._tokens = mergeDeep(this._tokens, tokens);
 
@@ -244,7 +242,14 @@ class Vilog {
 
     // callable instance
     const fn = (...args) => this._log('default', ...args);
+
     Object.setPrototypeOf(fn, this);
+
+    // override read only property 'name' of the function with the instance this.name
+    Object.defineProperty(fn, 'name', {
+      value: this.name,
+      configurable: true,
+    });
 
     Vilog.instances.set(this._id, fn);
 
@@ -257,8 +262,6 @@ class Vilog {
    * Disable logs by pattern.
    * If pattern is empty, disables all.
    * @param {string} [pattern] Pattern like '*', 'foo:*', or exact name.
-   *
-   * @TODO: it's experimental, undocumented
    */
   static disable (pattern) {
     // disable all
@@ -273,8 +276,6 @@ class Vilog {
    * Enable logs by pattern.
    * If pattern is empty or '*', clears all rules.
    * @param {string} [pattern] Pattern like '*', 'foo:*', or exact name.
-   *
-   * @TODO: it's experimental, undocumented
    */
   static enable (pattern) {
     if (!pattern || pattern === '*') {
@@ -289,7 +290,7 @@ class Vilog {
    * @param {string} name The logger's name.
    * @returns {boolean} True if disabled.
    *
-   * @TODO: it's experimental, undocumented
+   * @TODO: add to readme
    */
   static isDisabled (name) {
     const disabled = this.#disabled;
@@ -305,16 +306,19 @@ class Vilog {
    * Flush buffered logs in silent mode.
    *
    * @param {{}} [opts]
+   * @param {boolean} [opts.ret=false] When true, return the output instead of writing via `view()`.
+   * @param {boolean} [opts.color=true] When true, return the colored output, when false - plain text, w/o ANSI codes.
    * @param {'time'|'name'} [opts.orderBy='time']
    *   'time' -> strict chronological (ts/t, then seq, then name)
    *   'name' -> by name, then chronological (only makes sense when flushing all)
-   * @param {boolean} [opts.colored=true] When true, return the colored output, when false - plain text, w/o ANSI codes.
-   * @param {boolean} [opts.ret=false] When true, return the output instead of writing via `view()`.
    * @returns {string} The joined output ('' if nothing flushed).
    */
-  static flush ({ orderBy, colored, ret } = { orderBy: '', colored: true, ret: false }) {
+  static flush ({ ret, color: useColor, orderBy } = {}) {
     const list = this.#buffer;
     if (!list.length) return '';
+
+    ret = ret == null ? false : ret;
+    useColor = useColor == null ? true : useColor;
 
     if (orderBy === 'name') {
       list.sort((a, b) =>
@@ -329,10 +333,14 @@ class Vilog {
     let result = list.map(item => item.output).join('\n');
     this.#buffer = [];
 
-    // display colored log
+    if (!useColor) {
+      result = color.strip(result);
+    }
+
+    // display log
     if (!ret) view(result);
 
-    return colored ? result : color.strip(result);
+    return result;
   }
 
   /**
@@ -344,79 +352,97 @@ class Vilog {
   _init (levels) {
     let tokens = this._tokens;
     let resolvers = this._tokenFns;
+    let maxLevel = 0;
+    let hasRender = !!isFn(this._render);
 
     if (isFn(tokens['%d'])) resolvers['%d'] = tokens['%d'];
 
-    for (let level in levels) {
-      if (Object.prototype.hasOwnProperty.call(this, level)) {
-        console.warn(`[Vilog] level name "${level}" already present.`);
+    for (let levelName in levels) {
+      if (Object.prototype.hasOwnProperty.call(this, levelName)) {
+        console.warn(`[Vilog] level name "${levelName}" already present.`);
         continue;
       }
 
-      let opts = levels[level];
-      let styles = { ...defaultStyle, ...opts.style };
-      let dateStyler = buildStyler(styles['date'] || styles['%d']); // token style `date` is alias to `%d`
-      let layout = opts.layout || '';
-      let parts = parse(layout);
-      let chunks = [];
-      let pos = 0;
+      let opts = levels[levelName];
+      let hasLevelRender = !!isFn(opts.render);
 
-      if (!('label' in opts)) opts.label = ''; // set missing level label as empty string
-      if (!isFn(opts.render)) opts.render = null;
-      opts.useTrace = false;
-      opts.chunks = chunks; // chunks to render at runtime
-
-      for (let item of parts) {
-        let { type, token, name, start, end, padLeft = '', padRight = '' } = item;
-        let spec = tokens[name];
-        let useFn = isFn(spec);
-        let styler = name === '%d' ? dateStyler : buildStyler(styles[name]);
-        let chunk = '';
-
-        if (type === 'date') {
-          if (!styler) styler = dateStyler;
-          // `%d` or `%d{...}`
-          chunk = { name: 'date', fn: (date) => formatDate(token, date) };
-        } else if (spec == null) { // if not in custom tokens
-          // try to get token value at runtime by name (built-in or dynamic tokens), fall back to the token specified in layout
-          chunk = { name, token };
-        } else if (!useFn && String(spec).startsWith('%d')) {
-          chunk = { name: 'date', fn: (date) => formatDate(spec, date) };
-        } else if (useFn) {
-          chunk = { name, token };
-        } else {
-          chunk = spec;
-        }
-
-        if (name === 'file' || name === 'line') opts.useTrace = true;
-
-        // save dynamic tokens which will be evaluated at runtime
-        if (useFn) resolvers[name] = spec;
-
-        // layout chunk before token
-        if (pos < start) chunks.push(layout.slice(pos, start));
-
-        // apply style and inner spaces for non-empty tokens, e.g.
-        // - `{label}` -> `INFO`
-        // - `{ label }` -> ` INFO ` (useful for colored background)
-        if (spec !== '') {
-          styler
-            ? chunks.push(styler.open, padLeft, chunk, padRight, styler.close)
-            : chunks.push(padLeft, chunk, padRight);
-        }
-
-        pos = end;
+      if (hasRender && !hasLevelRender) {
+        opts.render = this._render;
+        hasLevelRender = true;
       }
 
-      // tail layout
-      if (pos < layout.length) {
-        chunks.push(layout.slice(pos));
+      if (!hasLevelRender) {
+        opts.render = null;
+
+        let styles = { ...defaultStyle, ...opts.style };
+        let dateStyler = buildStyler(styles['date'] || styles['%d']); // token style `date` is alias to `%d`
+        let layout = opts.layout || '';
+        let parts = parse(layout);
+        let chunks = [];
+        let pos = 0;
+
+        if (!('label' in opts)) opts.label = ''; // set missing level label as empty string
+        //if (!isFn(opts.render)) opts.render = null;
+
+        // TODO: handel the case when custom level has already used index, e.g. "2" (reserved for info)
+        if (opts.level == null) opts.level = maxLevel++; // auto increment index by custom level
+        else if (opts.level > maxLevel) maxLevel = opts.level;
+
+        opts.useTrace = false;
+        opts.chunks = chunks; // chunks to render at runtime
+
+        for (let item of parts) {
+          let { type, token, name, start, end, padLeft = '', padRight = '' } = item;
+          let spec = tokens[name];
+          let useFn = isFn(spec);
+          let styler = name === '%d' ? dateStyler : buildStyler(styles[name]);
+          let chunk = '';
+
+          if (type === 'date') {
+            if (!styler) styler = dateStyler;
+            // `%d` or `%d{...}`
+            chunk = { name: 'date', fn: (date) => formatDate(token, date) };
+          } else if (spec == null) { // if not in custom tokens
+            // try to get token value at runtime by name (built-in or dynamic tokens), fall back to the token specified in layout
+            chunk = { name, token };
+          } else if (!useFn && String(spec).startsWith('%d')) {
+            chunk = { name: 'date', fn: (date) => formatDate(spec, date) };
+          } else if (useFn) {
+            chunk = { name, token };
+          } else {
+            chunk = spec;
+          }
+
+          if (name === 'file' || name === 'line') opts.useTrace = true;
+
+          // save dynamic tokens which will be evaluated at runtime
+          if (useFn) resolvers[name] = spec;
+
+          // layout chunk before token
+          if (pos < start) chunks.push(layout.slice(pos, start));
+
+          // apply style and inner spaces for non-empty tokens, e.g.
+          // - `{label}` -> `INFO`
+          // - `{ label }` -> ` INFO ` (useful for colored background)
+          if (spec !== '') {
+            styler
+              ? chunks.push(styler.open, padLeft, chunk, padRight, styler.close)
+              : chunks.push(padLeft, chunk, padRight);
+          }
+
+          pos = end;
+        }
+
+        // tail layout
+        if (pos < layout.length) {
+          chunks.push(layout.slice(pos));
+        }
       }
 
       // define a dynamic level method
-      Object.defineProperty(this, level, {
+      Object.defineProperty(this, levelName, {
         value (...args) {
-          return this._log(level, ...args);
+          return this._log(levelName, ...args);
         },
       });
     }
@@ -429,46 +455,48 @@ class Vilog {
    * The method's own overhead is ~0.005(warmed)–0.080(cold) ms (5–80 µs).
    * This overhead is excluded from the measure, leaving a residual measure error of ~0.0003 ms (300 ns).
    *
-   * @param {string} level
-   * @param {*} msg
+   * @param {string} levelName
    * @param {...*} data
    * @return {string|void}
    * @private
    */
-  _log (level, ...data) {
-    let msg = data[0];
+  _log (levelName, ...data) {
     let lastTime = timer.lastTime;
     let measured = measure();
+    let msg = data[0];
+
+    if (msg == null) {
+      // mark timer only
+      timer.updateTimer();
+      return;
+    }
+
+    let isError = msg instanceof Error;
+
+    if (isError) {
+      levelName = 'error';
+      msg = msg.stack || msg.message;
+    }
+
+    let { level, label, chunks, render, useTrace } = this._levels[levelName];
 
     // allowed logging level is lower or this namespace is disabled
-    if (levels[level] > this._level || Vilog.isDisabled(this._id)) {
+    if (level > this._level || Vilog.isDisabled(this._id)) {
       // restore timing state
       timer.lastTime = lastTime;
       return;
     }
 
-    if (!msg) {
-      // mark timer only
-      updateTimer();
-      return;
-    }
+    // -> format message
+    if (!isError) msg = data.length > 1 ? this._format(...data) : '' + msg;
 
-    if (msg instanceof Error) {
-      level = 'error';
-      msg = msg.stack || msg.message;
-    } else {
-      msg = data.length > 1 ? this._format(...data) : '' + msg;
-    }
-
-    let { label, chunks, render, useTrace } = this._levels[level];
-    let { durationFmt: duration, elapsedFmt: elapsed } = measured;
-    // TODO: add to readme - WARNING: Detection the caller is slow. Never use this option in production.
+    let { durationFmt: duration, uptimeFmt: uptime } = measured;
     let { file, line, column } = useTrace ? getCaller(2) : {};
     let resolvers = this._tokenFns;
-    let tokens = { name: this._tokens.name, level, label, msg, data, date: new Date(), duration, elapsed, file, line, column };
+    let tokens = { name: this._tokens.name, level: levelName, label, msg, data, date: new Date(), duration, uptime, file, line, column };
     let output = '';
 
-    // evaluate dynamic tokens, can override default tokens (it's the feature, e.g. to mock for testing)
+    // -> evaluate dynamic tokens, can override default tokens
     for (let name in resolvers) {
       // note: token name - `%d` map to `date` for intern usage
       let key = name === '%d' ? 'date' : name;
@@ -476,6 +504,7 @@ class Vilog {
       tokens[key] = resolvers[name](val); // provide the original value of the built-in token into the resolver
     }
 
+    // -> rendering
     if (render) {
       // use custom render function defined for the layout
       output = render(tokens, color);
@@ -485,12 +514,14 @@ class Vilog {
         if (typeof chunk === 'object') {
           let value = tokens[chunk.name];
           if (chunk.fn) {
+            // evaluate dynamic token
             output += chunk.fn(value);
           } else {
             // normalize spacing before inject message
             if (chunk.name === 'msg') {
               if (output.includes('  ')) output = output.replace(/\s{2,}/g, ' ');
             }
+            // resolved token value or keep unresolved token
             output += value ?? chunk.token;
           }
         } else {
@@ -499,6 +530,7 @@ class Vilog {
       }
     }
 
+    // -> buffering in silent mode or output
     if (this._options.silent) {
       // if buffer would exceed capacity, auto-flush once
       if (Vilog.#maxBuffer !== Infinity && (Vilog.#buffer.length + 1) > Vilog.#maxBuffer) {
@@ -509,7 +541,7 @@ class Vilog {
         t: now(),
         id: this._id,
         name: this._tokens.name,
-        level,
+        level: levelName,
         output,
       });
     } else {
@@ -517,7 +549,7 @@ class Vilog {
     }
 
     // exclude run time of this function
-    updateTimer();
+    timer.updateTimer();
 
     return output;
   }

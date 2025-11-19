@@ -1,9 +1,9 @@
 import Vilog from 'Vilog';
 
 const levels = {
-  info: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {elapsed}] [{label}] {name} {msg}' },
-  warn: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {elapsed}] [{label}] {name} {msg}' },
-  error: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {elapsed}] [{label}] {name} {msg} {file}:{line}:{column}' },
+  info: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {uptime}] [{label}] {name} {msg}' },
+  warn: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {uptime}] [{label}] {name} {msg}' },
+  error: { layout: '[%d{HH:MM:ss} +{duration}] [Start: {uptime}] [{label}] {name} {msg} {file}:{line}:{column}' },
 };
 
 const silent = true;

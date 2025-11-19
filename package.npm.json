@@ -1,11 +1,11 @@
 {
 "name":"vilog",
-	"version": "0.0.1-beta.1",
-	"description": "A tiny tool for colorful debug output and performance profiling",
+	"version": "0.0.1-beta.3",
+	"description": "Fast logger for Node.js with color output, custom layouts, and profiling",
 	"keywords": [
 		"log",
+		"logger",
 		"debug",
-		"debugger",
 		"profiling"
 	],
 	"license": "ISC",

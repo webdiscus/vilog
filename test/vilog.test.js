@@ -1,11 +1,15 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import {importModule} from './util/helpers.js';
+import Vilog from '../src/index.js';
 
 const importVilog = async ()=> importModule('../../src/index.js')
 
 let outSpy;
 let consoleLogSpy;
 let consoleWarnSpy;
+
+// static values for mocked dynamic tokens
+const date = new Date('2025-11-11 11:59:01.075');
 
 beforeEach(() => {
   outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => {});
@@ -16,11 +20,16 @@ beforeEach(() => {
 // full module mock
 vi.mock('ansis', () => {
   const { Ansis } = require('ansis');
-  const ansis = new Ansis(0); // force disable colors
+  const ansis = new Ansis(3); // force enable colors
   return { default: ansis, Ansis }
 });
 
 describe('Vilog API', () => {
+  test('property `name`', async () => {
+    const log = new Vilog({ name: 'myApp' });
+    expect(log.name).toBe('myApp');
+  });
+
   test('duplicate namespace returns same instance and warns once', async () => {
     const Vilog = await importVilog();
 
@@ -211,5 +220,97 @@ describe('Vilog API', () => {
 
     Vilog.enable('*'); // global on
     expect(a.enabled).toBe(true);
+  });
+});
+
+describe('silent mode', () => {
+  test('options.silent=false', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({ silent: false });
+    log('text');
+    expect(outSpy).toHaveBeenCalled();
+  });
+
+  test('options.silent=true', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({ silent: true });
+    log('text');
+    expect(outSpy).not.toHaveBeenCalled();
+  });
+
+  test('options.silent=true, flush()', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({
+      silent: true,
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+      },
+    });
+
+    log('one');
+    log.info('two');
+
+    expect(outSpy).not.toHaveBeenCalled();
+
+    Vilog.flush();
+    const expected = `[90m2025-11-11T11:59:01.075Z[39m one
+[90m2025-11-11T11:59:01.075Z[39m [36m[1mINFO[22m[39m two
+`;
+
+    expect(outSpy).toHaveBeenCalled();
+    expect(outSpy).toHaveBeenCalledWith(expected);
+  });
+
+  test('options.silent=true, flush({ ret: true, color: false })', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({
+      silent: true,
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+      },
+    });
+
+    log('one');
+    log.info('two');
+
+    expect(outSpy).not.toHaveBeenCalled();
+
+    const received = Vilog.flush({ ret: true, color: false });
+    const expected = `2025-11-11T11:59:01.075Z one
+2025-11-11T11:59:01.075Z INFO two`;
+
+    expect(outSpy).not.toHaveBeenCalled();
+    expect(received).toBe(expected);
+  });
+
+  test('options.silent=true, flush({ ret: false })', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({
+      silent: true,
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+      },
+    });
+
+    log('one');
+    log.info('two');
+
+    expect(outSpy).not.toHaveBeenCalled();
+
+    Vilog.flush({ ret: false });
+    const expected = `[90m2025-11-11T11:59:01.075Z[39m one
+[90m2025-11-11T11:59:01.075Z[39m [36m[1mINFO[22m[39m two
+`;
+
+    expect(outSpy).toHaveBeenCalled();
+    expect(outSpy).toHaveBeenCalledWith(expected);
   });
 });

@@ -4,6 +4,9 @@ export default {
       'test/**/*.test.js',
       'test/**/*.test.ts',
     ],
+    exclude: [
+      'test/**/_*.test.js',
+    ],
     coverage: {
       include: [
         'src/**/*',

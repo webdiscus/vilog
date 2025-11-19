@@ -152,22 +152,22 @@ describe('built-in tokens', () => {
     expect(received).toBe('+11.11ns text');
   });
 
-  test('elapsed', async () => {
+  test('uptime', async () => {
     const log = new Vilog({
       silent,
       levels: {
         default: {
-          layout: 'elapsed: {elapsed}, {msg}',
+          layout: 'uptime: {uptime}, {msg}',
         },
       },
       tokens: {
         // mock built-in dynamic tokens
-        elapsed: '111.11ms',
+        uptime: '111.11ms',
       },
     });
 
     const received = log('text');
-    expect(received).toBe('elapsed: 111.11ms, text');
+    expect(received).toBe('uptime: 111.11ms, text');
   });
 
   test('name msg', async () => {
@@ -490,6 +490,85 @@ describe('spacing around tokens in layout', () => {
     const received = log('text');
     expect(received).toBe('duration: [ 11.01ns ] text');
   });
+
+  test('default level render data to json', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({
+      name: 'test',
+      levels: {
+        default: {
+          // serialize only log arguments (from 2nd)
+          render: (tokens) => JSON.stringify(tokens.data),
+        },
+      },
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+        uptime: () => '111.11ms',
+        duration: () => '11.01ns',
+      },
+    });
+
+    const expected = '["My data",{"arr":["foo","bar"]}]';
+    const received = log('My data', { arr: ['foo', 'bar'] });
+    expect(received).toBe(expected)
+  });
+
+  test('custom level render data to json', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({
+      name: 'test',
+      levels: {
+        toJson: {
+          // serialize only log arguments (from 2nd)
+          render: ({ date, name, level, data }) => JSON.stringify({ date, name, level, data }),
+        },
+      },
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+        uptime: () => '111.11ms',
+        duration: () => '11.01ns',
+      },
+    });
+
+    const expected = '{"date":"2025-11-11T10:11:01.075Z","name":"test","level":"toJson","data":["My data",{"arr":["foo","bar"]}]}';
+    const received = log.toJson('My data', { arr: ['foo', 'bar'] });
+    expect(received).toBe(expected)
+  });
+
+  test('custom general render', async () => {
+    const Vilog = await importVilog();
+
+    const log = new Vilog({
+      name: 'test',
+      levels: {
+        // define the render for a level only
+        toJson: {
+          render: ({ date, level, data }) => JSON.stringify({ date, type: 'level', level, data }),
+        },
+      },
+      // define general render function for all levels, level render has higher priority than general
+      render: ({ date, level, data }) => JSON.stringify({ date, type: 'general', level, data }),
+
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+      },
+    });
+
+    // test custom level render
+    let expected = '{"date":"2025-11-11T10:11:01.075Z","type":"level","level":"toJson","data":[{"event":"user.login","id":123}]}';
+    let received = log.toJson({ event: 'user.login', id: 123 });
+    expect(received).toBe(expected)
+
+    // test general custom render for any level
+    expected = '{"date":"2025-11-11T10:11:01.075Z","type":"general","level":"info","data":[{"event":"user.getInfo","id":456}]}';
+    received = log.info({ event: 'user.getInfo', id: 456 });
+    expect(received).toBe(expected)
+  });
 });
 
 describe('normalize spacing in layout', () => {
@@ -554,5 +633,74 @@ describe('log arguments', () => {
 
     const received = log.error('request failed', new Error('Boom!'));
     expect(received).contains('2025-11-11T11:11:01.075Z ERROR request failed Error: Boom!');
+  });
+
+  test('error', async () => {
+    const log = new Vilog({
+      silent,
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+      },
+    });
+
+    const received = log(new Error('Boom!'));
+    expect(received).contains('2025-11-11T11:11:01.075Z ERROR Error: Boom!');
+  });
+});
+
+describe('recipes', () => {
+  test('render to json via logJson', async () => {
+    const log = new Vilog({
+      silent,
+      name: 'api:user1',
+      levels: {
+        info: {
+          layout: '{msg}', // msg will be JSON string
+        },
+      },
+    });
+
+    function logJson(level, event, data = {}) {
+      const entry = {
+        date: date.toISOString(),
+        level,
+        name: log.name,
+        event,
+        ...data,
+      };
+
+      return log[level](JSON.stringify(entry));
+    }
+
+    const received = logJson('info', 'user.login', { userId: 42, ip: '127.0.0.1' });
+    const expected = '{"date":"2025-11-11T10:11:01.075Z","level":"info","name":"api:user1","event":"user.login","userId":42,"ip":"127.0.0.1"}';
+    expect(received).toBe(expected);
+  });
+
+  test('render to json, general', async () => {
+    const log = new Vilog({
+      silent,
+      name: 'api:user2',
+      levels: {
+        info: {
+          layout: '{msg}', // msg will be JSON string
+        },
+      },
+      // mock built-in dynamic tokens
+      tokens: {
+        '%d': () => date,
+      },
+      render: ({ date, level, name, data }) => JSON.stringify({
+        date: date.toISOString(),
+        level,
+        name,
+        ...data[0]
+      }),
+    });
+
+    const received = log.info({ event: 'user.login', userId: 24, ip: '127.0.0.7' });
+    const expected = '{"date":"2025-11-11T10:11:01.075Z","level":"info","name":"api:user2","event":"user.login","userId":24,"ip":"127.0.0.7"}';
+    expect(received).toBe(expected);
   });
 });
