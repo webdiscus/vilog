@@ -22,7 +22,7 @@ npm install vilog
 
 - **Flexible layout templates with built-in and custom tokens**
   - date token `%d` for an ISO-formatted date/time string: `2025-11-11T11:11:01.075Z`
-  - date token `%d{...}` with placeholders like `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss`, `SSS`\
+  - date token `%d{...}` with placeholders like `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss`, `sss`\
     Examples: `%d{YYYY-MM-DD HH:mm:ss}`, `%d{HH:mm:ss}`, `%d{ts}`, `%d{ts.sss}`, etc.
   - log tokens: `{level}`, `{label}`, `{name}`, `{msg}`
   - profiling tokens: `{duration}`, `{uptime}`
