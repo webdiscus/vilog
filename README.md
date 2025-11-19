@@ -17,10 +17,10 @@ npm install vilog
 <a id="features"></a>
 ## Features
 
-- **Pre-compiled layouts - minimal runtime overhead**\
+- **Minimal runtime overhead** due to pre-compiled layouts\
   Layout strings are parsed once into chunks, so at log time only dynamic tokens are evaluated and joined.
 
-- **Flexible layout templates with built-in and custom tokens**
+- **Flexible layout templates** with built-in and custom tokens
   - date token `%d` for an ISO-formatted date/time string: `2025-11-11T11:11:01.075Z`
   - date token `%d{...}` with placeholders like `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss`, `sss`\
     Examples: `%d{YYYY-MM-DD HH:mm:ss}`, `%d{HH:mm:ss}`, `%d{ts}`, `%d{ts.sss}`, etc.
@@ -29,15 +29,15 @@ npm install vilog
   - caller info tokens: `{file}`, `{line}`, `{column}`
   - custom user-defined tokens such as `{pid}`, `{memory}`, `%x`, etc.
 
-- **Built-in profiling with auto-scaled human-friendly units** (`ns`, `µs`, `ms`, `s`, `m`, `h`, `d`)
+- **Built-in profiling** with auto-scaled human-friendly units (`ns`, `µs`, `ms`, `s`, `m`, `h`, `d`)
   - `{duration}` - time since the previous log
   - `{uptime}` - time since application start
 
-- **Custom tokens for layout templates**
+- **Custom tokens** for layout templates
   - static - rendered once at initialization: `tokens: { pid: process.pid }`
   - dynamic - evaluated on each log call: `tokens: { memory: () => process.memoryUsage().heapUsed }`
 
-- **Flexible color styling for any token in a layout**
+- **Pretty Printing** for console output with flexible color styling
   - chained style strings: `style: { label: 'bold.yellow.bgRed' }`
   - truecolor styles via functions: `style: { label: Vilog.color.hex('#1D89D9') }`
 
@@ -45,16 +45,14 @@ npm install vilog
   - `{token}` vs `{ token }` preserves inner spaces, useful for background-colored labels
   - automatically collapses multiple spaces in layout templates
 
-- **Custom levels**
-  Define your own levels (`trace`, `json`, …) with:
+- **Custom levels** allow to define your own levels (`trace`, `json`, …) with:
   - `level` - numeric priority
   - `label` - human-readable label of the `level`
   - `layout` - template using built-in and custom tokens
   - `style` - color styling for any token in the layout
   - `render()` - custom render function for full control
 
-- **Custom render per level**
-  For special formats you can bypass layouts and return any string
+- **Custom render per level** for special formats you can bypass layouts and return any string
   - render a JSON string:
   ```js
   render: ({ date, name, level, data }) => JSON.stringify({ date, level, name, data });
@@ -68,7 +66,7 @@ npm install vilog
   Run loggers in `silent` mode to buffer output in memory.\
   Flush all buffered logs later in chronological order, with optional colored or plain-text output.
 
-- **Test-friendly by design** Built-in dynamic tokens for time, date, and duration can be fully mocked in tests.
+- **Test-friendly by design** wit built-in dynamic tokens for time, date, and duration can be mocked in tests.
 
 ---
 
