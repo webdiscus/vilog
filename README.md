@@ -34,8 +34,8 @@ npm install vilog
   - `{uptime}` - time since application start
 
 - **Custom tokens for layout templates**
-  - static — rendered once at initialization: `tokens: { pid: process.pid }`
-  - dynamic — evaluated on each log call: `tokens: { memory: () => process.memoryUsage().heapUsed }`
+  - static - rendered once at initialization: `tokens: { pid: process.pid }`
+  - dynamic - evaluated on each log call: `tokens: { memory: () => process.memoryUsage().heapUsed }`
 
 - **Flexible color styling for any token in a layout**
   - chained style strings: `style: { label: 'bold.yellow.bgRed' }`
@@ -44,10 +44,9 @@ npm install vilog
 - **Smart spacing and padding in layouts**
   - `{token}` vs `{ token }` preserves inner spaces, useful for background-colored labels
   - automatically collapses multiple spaces in layout templates
-  - empty tokens (e.g. `myToken: ''`) collapse their surrounding spaces
 
 - **Custom levels**
-  Define your own levels (`trace`, `json`, `audit`, …) with:
+  Define your own levels (`trace`, `json`, …) with:
   - `level` - numeric priority
   - `label` - human-readable label of the `level`
   - `layout` - template using built-in and custom tokens
